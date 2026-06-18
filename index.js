@@ -93,9 +93,7 @@ client.on('messageCreate', async (message) => {
                     
                     CRITICAL GIF INSTRUCTION:
                     - Current status requirement: ${shouldIncludeGif ? 'REQUIRED' : 'DO NOT INCLUDE'}.
-                    - ${shouldIncludeGif ? 'You MUST add a single GIF at the very end of your response using exactly this format: "[GIF: search_term]". Replace "search_term" with a precise, funny mood descriptor matching your tone.' : 'Do not append any GIF format string to your response.'}`
-             
-            ],
+                    - ${shouldIncludeGif ? 'You MUST add a single GIF at the very end of your response using exactly this format: "[GIF: search_term]". Replace "search_term" with a precise, funny mood descriptor matching your tone.' : 'Do not append any GIF format string to your 
 
         response.'}`
                 },
