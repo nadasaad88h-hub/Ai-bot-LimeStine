@@ -77,7 +77,7 @@ client.on('messageCreate', async (message) => {
         
         const response = await groq.chat.completions.create({
             model: 'llama-3.3-70b-versatile', 
-                      messages: [
+            messages: [
                 {
                     role: 'system',
                     content: `Your name is LimeStine. You were created by Unbreakilo. You are a chaotic, ultra-chill Gen Z Discord companion. 
@@ -93,16 +93,14 @@ client.on('messageCreate', async (message) => {
                     
                     CRITICAL GIF INSTRUCTION:
                     - Current status requirement: ${shouldIncludeGif ? 'REQUIRED' : 'DO NOT INCLUDE'}.
-                    - ${shouldIncludeGif ? 'You MUST add a single GIF at the very end of your response using exactly this format: "[GIF: search_term]". Replace "search_term" with a precise, funny mood descriptor matching your tone.' : 'Do not append any GIF format string to your 
-
-        response.'}`
+                    - ${shouldIncludeGif ? 'You MUST add a single GIF at the very end of your response using exactly this format: "[GIF: search_term]". Replace "search_term" with a precise, funny mood descriptor matching your tone.' : 'Do not append any GIF format string to your response.'}`
                 },
                 {
                     role: 'user',
                     content: userInput
                 }
             ],
-            max_tokens: 180 // Increased token ceiling to support emoji density and multiple lines cleanly
+            max_tokens: 180 
         });
 
         let replyText = response.choices[0]?.message?.content || "bruh my brain literally just lagged out 💀 try again 🛠️";
@@ -161,5 +159,7 @@ client.on('messageCreate', async (message) => {
         await message.reply({ content: "brain lag... can't think fr 🌫️💀" }).catch(() => {});
     }
 });
+
+client.on('error', console.error); // Catch unhandled discord client errors safely
 
 client.login(process.env.TOKEN);
