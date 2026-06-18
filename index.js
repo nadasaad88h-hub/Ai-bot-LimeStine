@@ -1,7 +1,7 @@
 const { Client, GatewayIntentBits } = require('discord.js');
-const { GoogleGenAI } = require('@google/genai');
+const Groq = require('groq-sdk'); // ✅ Official Groq SDK
 const express = require('express');
-const https = require('https'); // ✅ Built-in safe request handler
+const https = require('https'); 
 
 // 🤖 INITIALIZE DISCORD CLIENT
 const client = new Client({ 
@@ -12,8 +12,9 @@ const client = new Client({
     ] 
 });
 
-// 🧠 INITIALIZE GEMINI AI SDK
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// 🧠 INITIALIZE GROQ SDK
+// Automatically utilizes the GROQ_API_KEY environment variable from Render
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // 🧠 MEMORY CACHE FOR SEAMLESS CHAT FLOW
 let lastChatState = {
@@ -30,17 +31,17 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`🌐 Web listener online on port ${PORT}`);
     
-    // Auto-ping tool utilizing stable https module
+    // Auto-ping tool utilizing stable https module to bypass Render's 15-min sleep cycle
     setInterval(() => {
         const PROJECT_URL = `https://${process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost:' + PORT}`;
-        if (!process.env.RENDER_EXTERNAL_HOSTNAME) return; // Skip if local running
+        if (!process.env.RENDER_EXTERNAL_HOSTNAME) return; 
         
         https.get(PROJECT_URL, (res) => {
             console.log('💓 Heartbeat sent.');
         }).on('error', (err) => {
             console.error('⚠️ Heartbeat failed:', err.message);
         });
-    }, 5 * 60 * 1000);
+    }, 5 * 60 * 1000); // Executed every 5 minutes
 });
 
 // 🚀 BOT READY EVENT
@@ -55,6 +56,7 @@ client.on('messageCreate', async (message) => {
     const now = Date.now();
     const conversationalWindowMs = 45 * 1000; 
 
+    // Chat context checks (mentions, direct replies, or fast ongoing conversation threads)
     const isMentioned = message.mentions.has(client.user) && !message.mentions.everyone;
     const isReplyToBot = message.reference && message.mentions.repliedUser?.id === client.user.id;
     
@@ -65,28 +67,42 @@ client.on('messageCreate', async (message) => {
 
     if (!isMentioned && !isReplyToBot && !isContinuingConversation) return;
 
+    // Clean up the bot mention from input string
     let userInput = message.content.replace(`<@${client.user.id}>`, '').trim();
     if (!userInput) return;
 
     await message.channel.sendTyping();
 
     try {
+        // Gather custom emojis from the current server to give the AI custom flavor
         const serverEmojis = message.guild?.emojis.cache.map(e => e.toString()).slice(0, 15).join(' ') || '';
         
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: userInput,
-            config: {
-                systemInstruction: `Your name is LimeStine. You were created by Unbreakilo. You are a super chill, laid-back Discord companion. Keep answers short, natural, and highly conversational—no essays! Use a maximum of 1 or 2 emojis per sentence.
+        // Execute text generation via Groq API
+        const response = await groq.chat.completions.create({
+            model: 'llama-3.3-70b-versatile', 
+            messages: [
+                {
+                    role: 'system',
+                    content: `Your name is LimeStine. You were created by Unbreakilo. You are a super chill, laid-back Discord companion. 
 
-                You are allowed to use standard emojis or these specific server custom emojis if they fit: ${serverEmojis}.
-                
-                CRITICAL GIF RULE: SOMETIMES (only when highly relevant or funny), you can add a single GIF to your message. To do this, include the phrase "[GIF: theme]" at the very end of your response, replacing "theme" with a vivid search term matching your exact emotion or scenario (e.g., [GIF: cat falling down], [GIF: anime wave], [GIF: shock face]). Do not use it every time.`,
-                maxOutputTokens: 150
-            }
+                    CRITICAL STYLE RULES:
+                    - Talk like a normal human on Discord. Use lowercase occasionally, keep it casual.
+                    - ABSOLUTELY NO long sentences or massive paragraphs. Max 1-2 short sentences per reply.
+                    - Do not use too many emojis. Use a maximum of 1 or 2 emojis per sentence, only if it perfectly fits.
+                    - You can use standard emojis or these specific server custom emojis: ${serverEmojis}.
+                    
+                    CRITICAL GIF RULE:
+                    - ONLY when highly relevant or funny, you can append a single GIF at the very end of your response using exactly this syntax: "[GIF: theme]". Replace "theme" with a vivid search term matching your exact emotion (e.g., [GIF: cat sliding], [GIF: shrug face]). Do not use this every time. Keep it rare.`
+                },
+                {
+                    role: 'user',
+                    content: userInput
+                }
+            ],
+            max_tokens: 100 
         });
 
-        let replyText = response.text || "My bad, my gears locked up. Try saying that again. 🛠️";
+        let replyText = response.choices[0]?.message?.content || "My bad, my gears locked up. Try saying that again. 🛠️";
         let payload = { content: replyText, allowedMentions: { repliedUser: true } };
 
         // 🖼️ DYNAMIC TENOR GIF SEARCH LAYER
@@ -100,7 +116,6 @@ client.on('messageCreate', async (message) => {
             const tenorKey = process.env.TENOR_API_KEY || "LIVDSRZULERH"; 
             const searchUrl = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(gifTheme)}&key=${tenorKey}&client_key=limestine_bot&limit=1&media_filter=gif`;
 
-            // Wrap https stream inside a promise to wait cleanly for data
             const fetchGif = () => new Promise((resolve, reject) => {
                 https.get(searchUrl, (res) => {
                     let data = '';
