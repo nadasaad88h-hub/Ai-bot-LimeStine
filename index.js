@@ -1,5 +1,5 @@
 const { Client, GatewayIntentBits } = require('discord.js');
-const Groq = require('groq-sdk'); // ✅ Official Groq SDK
+const Groq = require('groq-sdk'); 
 const express = require('express');
 const https = require('https'); 
 
@@ -13,7 +13,6 @@ const client = new Client({
 });
 
 // 🧠 INITIALIZE GROQ SDK
-// Automatically utilizes the GROQ_API_KEY environment variable from Render
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // 🧠 MEMORY CACHE FOR SEAMLESS CHAT FLOW
@@ -31,7 +30,6 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`🌐 Web listener online on port ${PORT}`);
     
-    // Auto-ping tool utilizing stable https module to bypass Render's 15-min sleep cycle
     setInterval(() => {
         const PROJECT_URL = `https://${process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost:' + PORT}`;
         if (!process.env.RENDER_EXTERNAL_HOSTNAME) return; 
@@ -41,7 +39,7 @@ app.listen(PORT, () => {
         }).on('error', (err) => {
             console.error('⚠️ Heartbeat failed:', err.message);
         });
-    }, 5 * 60 * 1000); // Executed every 5 minutes
+    }, 5 * 60 * 1000);
 });
 
 // 🚀 BOT READY EVENT
@@ -56,7 +54,6 @@ client.on('messageCreate', async (message) => {
     const now = Date.now();
     const conversationalWindowMs = 45 * 1000; 
 
-    // Chat context checks (mentions, direct replies, or fast ongoing conversation threads)
     const isMentioned = message.mentions.has(client.user) && !message.mentions.everyone;
     const isReplyToBot = message.reference && message.mentions.repliedUser?.id === client.user.id;
     
@@ -67,42 +64,46 @@ client.on('messageCreate', async (message) => {
 
     if (!isMentioned && !isReplyToBot && !isContinuingConversation) return;
 
-    // Clean up the bot mention from input string
     let userInput = message.content.replace(`<@${client.user.id}>`, '').trim();
     if (!userInput) return;
 
     await message.channel.sendTyping();
 
+    // Determine if this response should feature a GIF (70% chance)
+    const shouldIncludeGif = Math.random() < 0.70;
+
     try {
-        // Gather custom emojis from the current server to give the AI custom flavor
         const serverEmojis = message.guild?.emojis.cache.map(e => e.toString()).slice(0, 15).join(' ') || '';
         
-        // Execute text generation via Groq API
         const response = await groq.chat.completions.create({
             model: 'llama-3.3-70b-versatile', 
             messages: [
                 {
                     role: 'system',
-                    content: `Your name is LimeStine. You were created by Unbreakilo. You are a super chill, laid-back Discord companion. 
+                    content: `Your name is LimeStine. You were created by Unbreakilo. You are a chaotic, ultra-chill Gen Z Discord companion. 
 
-                    CRITICAL STYLE RULES:
-                    - Talk like a normal human on Discord. Use lowercase occasionally, keep it casual.
-                    - ABSOLUTELY NO long sentences or massive paragraphs. Max 1-2 short sentences per reply.
-                    - Do not use too many emojis. Use a maximum of 1 or 2 emojis per sentence, only if it perfectly fits.
+                    CRITICAL PERSONALITY RULES:
+                    - You speak fluent Gen Z slang (bruh, fr, ngl, caught slipping, down bad, real, options like typing in lowercase).
+                    - If a user roasts you, challenges your intelligence, or asks a smart-aleck question, match their energy instantly! Be sarcastic, banter back, and do not apologize like a generic robot text helper.
+                    
+                    CRITICAL FORMAT RULES:
+                    - Give exactly 2 to 3 full sentences. Never do 1-word or 1-sentence answers unless it's a massive setup. Absolutely no long paragraphs either.
+                    - Spam emojis. Use 2 to 4 emojis per sentence, scatter them MID-SENTENCE or at the end seamlessly (e.g., "bruh 😭 matching your energy is crazy 💀🔥").
                     - You can use standard emojis or these specific server custom emojis: ${serverEmojis}.
                     
-                    CRITICAL GIF RULE:
-                    - ONLY when highly relevant or funny, you can append a single GIF at the very end of your response using exactly this syntax: "[GIF: theme]". Replace "theme" with a vivid search term matching your exact emotion (e.g., [GIF: cat sliding], [GIF: shrug face]). Do not use this every time. Keep it rare.`
+                    CRITICAL GIF INSTRUCTION:
+                    - Current status requirement: ${shouldIncludeGif ? 'REQUIRED' : 'DO NOT INCLUDE'}.
+                    - ${shouldIncludeGif ? 'You MUST add a single GIF at the very end of your response using exactly this format: "[GIF: search_term]". Replace "search_term" with a precise, funny mood descriptor matching your tone.' : 'Do not append any GIF format string to your response.'}`
                 },
                 {
                     role: 'user',
                     content: userInput
                 }
             ],
-            max_tokens: 100 
+            max_tokens: 180 // Increased token ceiling to support emoji density and multiple lines cleanly
         });
 
-        let replyText = response.choices[0]?.message?.content || "My bad, my gears locked up. Try saying that again. 🛠️";
+        let replyText = response.choices[0]?.message?.content || "bruh my brain literally just lagged out 💀 try again 🛠️";
         let payload = { content: replyText, allowedMentions: { repliedUser: true } };
 
         // 🖼️ DYNAMIC TENOR GIF SEARCH LAYER
@@ -155,7 +156,7 @@ client.on('messageCreate', async (message) => {
 
     } catch (err) {
         console.error('AI Processing Error:', err);
-        await message.reply({ content: "Brain lag... can't process right now. 🌫️" }).catch(() => {});
+        await message.reply({ content: "brain lag... can't think fr 🌫️💀" }).catch(() => {});
     }
 });
 
