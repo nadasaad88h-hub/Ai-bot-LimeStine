@@ -54,6 +54,12 @@ client.on('messageCreate', async (message) => {
     const now = Date.now();
     const conversationalWindowMs = 45 * 1000; 
 
+    // 🛑 ANTI-INTERFERENCE INTERCEPTOR
+    // If the message is a reply to a human (NOT the bot), stay completely out of it!
+    const isReplyToSomeoneElse = message.reference && message.mentions.repliedUser?.id !== client.user.id;
+    if (isReplyToSomeoneElse) return;
+
+    // Core chat activation contexts
     const isMentioned = message.mentions.has(client.user) && !message.mentions.everyone;
     const isReplyToBot = message.reference && message.mentions.repliedUser?.id === client.user.id;
     
@@ -62,14 +68,47 @@ client.on('messageCreate', async (message) => {
         message.channelId === lastChatState.channelId && 
         (now - lastChatState.timestamp) < conversationalWindowMs;
 
-    if (!isMentioned && !isReplyToBot && !isContinuingConversation) return;
+    // 🔥 PASSIVE BACKGROUND REACTION LAYER (Runs if the bot isn't directly being spoken to)
+    if (!isMentioned && !isReplyToBot && !isContinuingConversation) {
+        // Protect API: Only evaluate messages with at least 25 characters (server updates, roasts, hype)
+        if (!message.content || message.content.length < 25) return;
 
+        try {
+            const reactCheck = await groq.chat.completions.create({
+                model: 'llama-3.3-70b-versatile',
+                messages: [
+                    {
+                        role: 'system',
+                        content: `You are an AI assistant checking if a Discord message is high-energy, an epic roast, a server update, or hype.
+                        If the message is regular chatter (like basic chat, gaming casual text, generic updates), respond with exactly: "SKIP".
+                        If it is fire, a wild roast, epic news, or a big announcement, respond ONLY with 1 to 3 standard emojis that fit the vibe, separated by spaces. No text.`
+                    },
+                    { role: 'user', content: message.content }
+                ],
+                max_tokens: 10
+            });
+
+            const decision = reactCheck.choices[0]?.message?.content?.trim();
+            if (decision && decision !== 'SKIP' && !decision.includes('SKIP')) {
+                // Safely extract emojis from the AI's response string
+                const emojis = decision.match(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu);
+                if (emojis) {
+                    for (const emoji of emojis.slice(0, 3)) {
+                        await message.react(emoji).catch(() => {});
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Passive React Layer Error:', err.message);
+        }
+        return; // Break execution so it doesn't accidentally try to send a text reply
+    }
+
+    // 💬 ACTIVE CHAT RESPONSE LAYER (Fires when directly interacting with the bot)
     let userInput = message.content.replace(`<@${client.user.id}>`, '').trim();
     if (!userInput) return;
 
     await message.channel.sendTyping();
-
-    // Determine if this response should feature a GIF (70% chance)
     const shouldIncludeGif = Math.random() < 0.70;
 
     try {
@@ -160,6 +199,6 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-client.on('error', console.error); // Catch unhandled discord client errors safely
+client.on('error', console.error);
 
 client.login(process.env.TOKEN);
